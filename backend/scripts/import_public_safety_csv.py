@@ -11,27 +11,69 @@ from db import calculate_zone_id, get_connection, init_tables
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Import CCTV or lamp CSV data into public_safety_zone."
+        description="Import safety facility CSV data into public_safety_zone."
     )
-    parser.add_argument("--type", choices=["cctv", "lamp"], required=True)
+    parser.add_argument("--type", choices=["cctv", "lamp", "convenience"])
     parser.add_argument("--file", required=True)
+    parser.add_argument("--type-column", default="type")
     parser.add_argument("--lat-column", required=True)
     parser.add_argument("--lng-column", required=True)
     parser.add_argument("--encoding", default="utf-8-sig")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.type and not args.type_column:
+        parser.error("--type or --type-column is required")
+    return args
 
 
-def calculate_public_safety_score(cctv_count, lamp_count):
-    return min(5.0, (cctv_count * 0.25) + (lamp_count * 0.08))
+def calculate_public_safety_score(cctv_count, lamp_count, convenience_count):
+    return min(
+        5.0,
+        (cctv_count * 0.25) + (lamp_count * 0.08) + (convenience_count * 0.12),
+    )
 
 
-def read_zone_counts(file_path, lat_column, lng_column, encoding):
-    zone_counts = defaultdict(int)
+def normalize_type(value):
+    normalized = (value or "").strip().lower()
+    aliases = {
+        "cctv": "cctv",
+        "camera": "cctv",
+        "lamp": "lamp",
+        "light": "lamp",
+        "streetlight": "lamp",
+        "security_light": "lamp",
+        "보안등": "lamp",
+        "가로등": "lamp",
+        "convenience": "convenience",
+        "convenience_store": "convenience",
+        "store": "convenience",
+        "편의점": "convenience",
+    }
+    return aliases.get(normalized)
+
+
+def read_zone_counts(
+    file_path,
+    default_type,
+    type_column,
+    lat_column,
+    lng_column,
+    encoding,
+):
+    zone_counts_by_type = {
+        "cctv": defaultdict(int),
+        "lamp": defaultdict(int),
+        "convenience": defaultdict(int),
+    }
     skipped_count = 0
 
     with Path(file_path).open(newline="", encoding=encoding) as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
+            facility_type = default_type or normalize_type(row.get(type_column))
+            if facility_type not in zone_counts_by_type:
+                skipped_count += 1
+                continue
+
             try:
                 lat = float(row[lat_column])
                 lng = float(row[lng_column])
@@ -44,14 +86,14 @@ def read_zone_counts(file_path, lat_column, lng_column, encoding):
                 skipped_count += 1
                 continue
 
-            zone_counts[zone_id] += 1
+            zone_counts_by_type[facility_type][zone_id] += 1
 
-    return zone_counts, skipped_count
+    return zone_counts_by_type, skipped_count
 
 
 def load_existing_public_safety_zones():
     sql = """
-    SELECT zone_id, cctv_count, lamp_count
+    SELECT zone_id, cctv_count, lamp_count, convenience_count
     FROM public_safety_zone
     """
     with get_connection() as conn:
@@ -63,33 +105,44 @@ def load_existing_public_safety_zones():
         row["zone_id"]: {
             "cctv_count": row["cctv_count"],
             "lamp_count": row["lamp_count"],
+            "convenience_count": row["convenience_count"],
         }
         for row in rows
     }
 
 
-def upsert_counts(data_type, zone_counts):
+def upsert_counts(zone_counts_by_type):
     existing_rows = load_existing_public_safety_zones()
-    changed_zone_ids = set(existing_rows.keys()) | set(zone_counts.keys())
+    changed_zone_ids = set(existing_rows.keys())
+    for zone_counts in zone_counts_by_type.values():
+        changed_zone_ids |= set(zone_counts.keys())
 
     rows = []
     for zone_id in sorted(changed_zone_ids):
-        existing = existing_rows.get(zone_id, {"cctv_count": 0, "lamp_count": 0})
-        cctv_count = existing["cctv_count"]
-        lamp_count = existing["lamp_count"]
+        cctv_count = zone_counts_by_type["cctv"].get(zone_id)
+        lamp_count = zone_counts_by_type["lamp"].get(zone_id)
+        convenience_count = zone_counts_by_type["convenience"].get(zone_id)
 
-        if data_type == "cctv":
-            cctv_count = zone_counts.get(zone_id, 0)
-        else:
-            lamp_count = zone_counts.get(zone_id, 0)
+        if cctv_count is None or lamp_count is None or convenience_count is None:
+            existing = existing_rows.get(
+                zone_id,
+                {"cctv_count": 0, "lamp_count": 0, "convenience_count": 0},
+            )
+            if cctv_count is None:
+                cctv_count = existing["cctv_count"]
+            if lamp_count is None:
+                lamp_count = existing["lamp_count"]
+            if convenience_count is None:
+                convenience_count = existing["convenience_count"]
 
         rows.append(
             {
                 "zone_id": zone_id,
                 "cctv_count": cctv_count,
                 "lamp_count": lamp_count,
+                "convenience_count": convenience_count,
                 "public_safety_score": calculate_public_safety_score(
-                    cctv_count, lamp_count
+                    cctv_count, lamp_count, convenience_count
                 ),
             }
         )
@@ -99,17 +152,20 @@ def upsert_counts(data_type, zone_counts):
         zone_id,
         cctv_count,
         lamp_count,
+        convenience_count,
         public_safety_score
     )
     VALUES (
         %(zone_id)s,
         %(cctv_count)s,
         %(lamp_count)s,
+        %(convenience_count)s,
         %(public_safety_score)s
     )
     ON DUPLICATE KEY UPDATE
         cctv_count = VALUES(cctv_count),
         lamp_count = VALUES(lamp_count),
+        convenience_count = VALUES(convenience_count),
         public_safety_score = VALUES(public_safety_score)
     """
     with get_connection() as conn:
@@ -122,15 +178,19 @@ def upsert_counts(data_type, zone_counts):
 def main():
     args = parse_args()
     init_tables()
-    zone_counts, skipped_count = read_zone_counts(
+    zone_counts_by_type, skipped_count = read_zone_counts(
         args.file,
+        args.type,
+        args.type_column,
         args.lat_column,
         args.lng_column,
         args.encoding,
     )
-    upserted_count = upsert_counts(args.type, zone_counts)
+    upserted_count = upsert_counts(zone_counts_by_type)
 
-    print(f"loaded_zones={len(zone_counts)}")
+    print(f"loaded_cctv_zones={len(zone_counts_by_type['cctv'])}")
+    print(f"loaded_lamp_zones={len(zone_counts_by_type['lamp'])}")
+    print(f"loaded_convenience_zones={len(zone_counts_by_type['convenience'])}")
     print(f"upserted_zones={upserted_count}")
     print(f"skipped_rows={skipped_count}")
 
