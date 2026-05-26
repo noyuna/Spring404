@@ -907,7 +907,7 @@ function App() {
               width: 58,
               border: 'none',
               borderRadius: 14,
-              backgroundColor: '#111827',
+              backgroundColor: '#14532d',
               color: 'white',
               fontWeight: 800,
               boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)',
@@ -1011,7 +1011,7 @@ function App() {
           <GoogleMap
             mapContainerStyle={mapStyle}
             center={center}
-            zoom={15}
+            zoom={16}
             options={{
               clickableIcons: true,
               fullscreenControl: false,
@@ -1023,11 +1023,35 @@ function App() {
             onClick={handleReviewPlaceSelect}
           >
             {myLocation && (
-              <Marker
-                position={myLocation}
-                icon={getMyLocationIcon()}
-                title="내 위치"
-              />
+              <>
+                <OverlayView
+                  position={myLocation}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                  getPixelPositionOffset={() => ({
+                    x: -22,
+                    y: -22,
+                  })}
+                >
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 999,
+                      backgroundColor: 'rgba(37, 99, 235, 0.16)',
+                      boxShadow:
+                        '0 0 12px rgba(37, 99, 235, 0.55), 0 0 28px rgba(37, 99, 235, 0.28)',
+                      border: '1px solid rgba(37, 99, 235, 0.28)',
+                    }}
+                  />
+                </OverlayView>
+
+                <Marker
+                  position={myLocation}
+                  icon={getMyLocationIcon()}
+                  title="내 위치"
+                  zIndex={30}
+                />
+              </>
             )}
 
             {selectedPlace && !isRouteView && (
@@ -1047,7 +1071,7 @@ function App() {
                       height: 44,
                       border: 'none',
                       borderRadius: '50% 50% 50% 0',
-                      backgroundColor: '#15803D',
+                      backgroundColor: '#14532d',
                       transform: 'rotate(-45deg)',
                       boxShadow: '0 4px 12px rgba(15, 23, 42, 0.28)',
                       display: 'flex',
@@ -1062,8 +1086,7 @@ function App() {
                         width: 25,
                         height: 25,
                         borderRadius: 999,
-                        backgroundColor:
-                          selectedPlace.iconBackgroundColor || '#ffffff',
+                        backgroundColor: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1282,7 +1305,7 @@ function App() {
                         ? '2px solid #16a34a'
                         : '1px solid #e5e7eb',
                     backgroundColor:
-                      selectedRouteIndex === idx ? '#ecfdf5' : 'white',
+                      selectedRouteIndex === idx ? '#f8fafc' : 'white',
                     borderRadius: 14,
                     padding: 16,
                     marginBottom: 12,
@@ -1329,7 +1352,7 @@ function App() {
                   fontSize: 24,
                   fontWeight: 900,
                   fontFamily: '"Trebuchet MS", "Segoe UI", sans-serif',
-                  color: '#111827',
+                  color: '#14532d',
                   lineHeight: 1.1,
                 }}
               >
@@ -1343,7 +1366,18 @@ function App() {
                   color: '#6b7280',
                 }}
               >
-                AI 기반 안전지도
+                Safety Map
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: '#9ca3af',
+                  lineHeight: 1.4,
+                }}
+              >
+                내 주변 장소를 눌러 안전 점수와 리뷰를 확인해보세요
               </div>
             </div>
           ) : (
@@ -1582,7 +1616,7 @@ function App() {
                     marginTop: 8,
                     border: 'none',
                     borderRadius: 12,
-                    backgroundColor: '#111827',
+                    backgroundColor: '#14532d',
                     color: 'white',
                     fontWeight: 900,
                   }}
@@ -1669,7 +1703,7 @@ const placeActionStyle = (backgroundColor, color) => ({
 
 const noticeStyle = {
   margin: '8px 0 12px',
-  color: '#2563eb',
+  color: '#14532d',
   fontWeight: 800,
   fontSize: 14,
 };
