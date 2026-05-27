@@ -1,19 +1,18 @@
-import os
 import json
+import os
+
 import uvicorn
-from fastapi import FastAPI, Request
+from dotenv import load_dotenv
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
-from dotenv import load_dotenv
+from pydantic import BaseModel
 
-# 환경변수(.env) 자동 로드 및 OpenAI 클라이언트 초기화
 load_dotenv()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# FastAPI 애플리케이션 객체 생성
 app = FastAPI(title="HereJi AI Scoring API")
 
-# [CORS 설정] 아림님 서버 및 프론트엔드 통신 허용
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,21 +22,43 @@ app.add_middleware(
 )
 
 
-# =========================================================================
-# GPT-4o-mini 문맥 분석 함수 (기존 유나님 핵심 로직)
-# =========================================================================
+class ReviewInput(BaseModel):
+    review: str
+
+
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class RouteInput(BaseModel):
+    id: str
+    path: list[RoutePoint]
+
+
+class ZoneInput(BaseModel):
+    zone_id: int
+    min_lat: float
+    max_lat: float
+    min_lng: float
+    max_lng: float
+    final_safety_score: float
+
+
+class RouteRankInput(BaseModel):
+    routes: list[RouteInput]
+    zones: list[ZoneInput]
+
+
+def clamp_score(score: float) -> float:
+    return max(0.0, min(float(score), 5.0))
+
+
 def analyze_review_with_ai(review_text: str) -> float:
     system_instruction = (
-        "당신은 CPTED(범죄예방환경설계) 전문가입니다. "
-        "제공된 사용자 리뷰 텍스트의 문맥을 분석하여 해당 지역의 안전 점수를 산출하세요.\n\n"
-        "점수 산출 기준 (1~5점 척도):\n"
-        "- 5점: 매우 안전함 (가로등 밝음, 유동 인구 적당함, 시야 확보 원활 등)\n"
-        "- 3점: 보통 (평범한 골목길, 특이사항 없음)\n"
-        "- 1점: 매우 위험함 (조도 부족, 막다른 길, 우범 지역 징후 등)\n\n"
-        "주의 사항:\n"
-        "1. 사용자의 주관적인 감정 표현보다는 물리적 환경 단서에 집중하세요.\n"
-        "2. 출력은 반드시 아래의 JSON 포맷으로만 답변하세요. 다른 설명은 일절 금지합니다.\n\n"
-        'Output Format: {"ai_score": 3.5}'
+        "You are a CPTED safety expert. Analyze the user's place review and "
+        "return only JSON. Score physical safety from 1 to 5, where 5 is very "
+        'safe and 1 is very unsafe. Output format: {"ai_score": 3.5}'
     )
 
     try:
@@ -46,62 +67,92 @@ def analyze_review_with_ai(review_text: str) -> float:
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_instruction},
-                {"role": "user", "content": f"리뷰 텍스트: '{review_text}'"}
+                {"role": "user", "content": review_text},
             ],
-            temperature=0.2
+            temperature=0.2,
         )
         result = json.loads(response.choices[0].message.content)
-        return float(result.get("ai_score", 3.0))
+        return clamp_score(result.get("ai_score", 3.0))
     except Exception as e:
-        print(f"🔗 OpenAI API 호출 에러 (기본값 3.0 반환): {e}")
+        print(f"OpenAI review analysis failed, using default score 3.0: {e}")
         return 3.0
 
 
-# =========================================================================
-# "/analyze" 주소로 POST 요청이 오면 실행되는 핵심 연동 라우터
-# =========================================================================
+def apply_keyword_penalties(review_text: str, ai_score: float) -> float:
+    danger_score = 5.0 - clamp_score(ai_score)
+    penalty_keywords = {
+        "취객": 0.5,
+        "술취": 0.5,
+        "폭행": 1.0,
+        "범죄": 1.0,
+        "칼부림": 1.5,
+        "바바리맨": 1.0,
+        "스토킹": 1.0,
+        "어두": 0.5,
+        "무서": 0.5,
+    }
+
+    for keyword, penalty in penalty_keywords.items():
+        if keyword in review_text:
+            danger_score += penalty
+
+    return clamp_score(danger_score)
+
+
 @app.post("/analyze")
-async def analyze_review(request: Request):
-    try:
-        # 1. 아림님이 보낸 JSON 데이터 읽기 ({"review": text})
-        data = await request.json()
-        user_review = data.get("review") 
-        
-        print(f"📥 아림님 서버로부터 수신된 리뷰: {user_review}")
-
-        if not user_review:
-            return {"danger_score": 0.0}
-
-        # 2. 1단계: OpenAI GPT 모델을 돌려서 문맥 기반 안전 점수(1~5점) 획득
-        ai_safety_score = analyze_review_with_ai(user_review)
-        print(f"🤖 GPT가 분석한 1차 안전 점수: {ai_safety_score}")
-
-        # 3. 2단계: 아림님이 원하는 '위험도(Danger Score)'로 역산 기준 세우기
-        # (안전 점수가 5점 만점에 1점이면 -> 기본 위험도는 4점이 됨)
-        calculated_danger_score = 5.0 - ai_safety_score
-
-        # 4. 3단계: 확정적 패널티 키워드 감지 (위험도가 올라가야 하므로 여기서는 + 플러스 처리)
-        penalty_keywords = {
-            "취객": 0.5, "싸움": 0.5, "폭행": 1.0, 
-            "범죄": 1.0, "칼부림": 1.5, "바바리맨": 1.0, "스토킹": 1.0
-        }
-
-        for word, penalty in penalty_keywords.items():
-            if word in user_review:
-                # 위험 단어 발견 시 위험도 점수를 가산
-                calculated_danger_score = min(5.0, calculated_danger_score + penalty)
-                print(f"🚨 감지된 위험 단어: {word} -> 현재 위험 점수: {calculated_danger_score}")
-
-        # 5. 아림님 서버가 기다리는 포맷으로 최종 위험도 점수 반환
-        print(f"📤 아림님 백엔드로 전송할 최종 danger_score: {calculated_danger_score}")
-        return {"danger_score": calculated_danger_score}
-
-    except Exception as e:
-        print(f"에러 발생: {e}")
-        return {"danger_score": 0.0}
+async def analyze_endpoint(payload: ReviewInput):
+    ai_score = analyze_review_with_ai(payload.review)
+    danger_score = apply_keyword_penalties(payload.review, ai_score)
+    return {"ai_score": round(5.0 - danger_score, 2), "danger_score": round(danger_score, 2)}
 
 
-# 이 파일이 메인으로 실행될 때 서버 가동
+def find_zone_id_for_point(point: RoutePoint, zones: list[ZoneInput]) -> int | None:
+    for zone in zones:
+        if (
+            zone.min_lat <= point.lat < zone.max_lat
+            and zone.min_lng <= point.lng < zone.max_lng
+        ):
+            return zone.zone_id
+
+    return None
+
+
+@app.post("/rank-routes")
+async def rank_routes(payload: RouteRankInput):
+    zone_scores = {
+        zone.zone_id: clamp_score(zone.final_safety_score)
+        for zone in payload.zones
+    }
+    ranked_routes = []
+
+    for route in payload.routes:
+        zone_ids = []
+        seen_zone_ids = set()
+
+        for point in route.path:
+            zone_id = find_zone_id_for_point(point, payload.zones)
+            if zone_id is not None and zone_id not in seen_zone_ids:
+                seen_zone_ids.add(zone_id)
+                zone_ids.append(zone_id)
+
+        total_score = sum(zone_scores.get(zone_id, 0.0) for zone_id in zone_ids)
+        average_score = total_score / len(zone_ids) if zone_ids else 0.0
+
+        ranked_routes.append(
+            {
+                "id": route.id,
+                "zoneIds": zone_ids,
+                "totalSafetyScore": round(total_score, 2),
+                "safetyScore": round(average_score, 2),
+            }
+        )
+
+    ranked_routes.sort(
+        key=lambda route: (route["totalSafetyScore"], route["safetyScore"]),
+        reverse=True,
+    )
+    return {"routes": ranked_routes}
+
+
 if __name__ == "__main__":
-    # 아림님 소스코드에 하드코딩된 포트 8001번으로 서버 구동
     uvicorn.run(app, host="0.0.0.0", port=8001)
