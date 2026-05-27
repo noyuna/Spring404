@@ -1,61 +1,107 @@
+import os
+import json
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+from openai import OpenAI
+from dotenv import load_dotenv
+
+# 환경변수(.env) 자동 로드 및 OpenAI 클라이언트 초기화
+load_dotenv()
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # FastAPI 애플리케이션 객체 생성
-app = FastAPI()
+app = FastAPI(title="HereJi AI Scoring API")
 
-# [CORS 설정] 프론트엔드와 백엔드 간의 데이터 주고받기를 허용하는 보안 설정
+# [CORS 설정] 아림님 서버 및 프론트엔드 통신 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 모든 도메인에서의 접근을 허용
-    allow_methods=["*"], # GET, POST, PUT, DELETE 등 모든 HTTP 메서드 허용
-    allow_headers=["*"], # 모든 HTTP 헤더 허용
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# [API 경로 설정] "/analyze" 주소로 POST 요청이 오면 아래 함수를 실행함
+
+# =========================================================================
+# GPT-4o-mini 문맥 분석 함수 (기존 유나님 핵심 로직)
+# =========================================================================
+def analyze_review_with_ai(review_text: str) -> float:
+    system_instruction = (
+        "당신은 CPTED(범죄예방환경설계) 전문가입니다. "
+        "제공된 사용자 리뷰 텍스트의 문맥을 분석하여 해당 지역의 안전 점수를 산출하세요.\n\n"
+        "점수 산출 기준 (1~5점 척도):\n"
+        "- 5점: 매우 안전함 (가로등 밝음, 유동 인구 적당함, 시야 확보 원활 등)\n"
+        "- 3점: 보통 (평범한 골목길, 특이사항 없음)\n"
+        "- 1점: 매우 위험함 (조도 부족, 막다른 길, 우범 지역 징후 등)\n\n"
+        "주의 사항:\n"
+        "1. 사용자의 주관적인 감정 표현보다는 물리적 환경 단서에 집중하세요.\n"
+        "2. 출력은 반드시 아래의 JSON 포맷으로만 답변하세요. 다른 설명은 일절 금지합니다.\n\n"
+        'Output Format: {"ai_score": 3.5}'
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"리뷰 텍스트: '{review_text}'"}
+            ],
+            temperature=0.2
+        )
+        result = json.loads(response.choices[0].message.content)
+        return float(result.get("ai_score", 3.0))
+    except Exception as e:
+        print(f"🔗 OpenAI API 호출 에러 (기본값 3.0 반환): {e}")
+        return 3.0
+
+
+# =========================================================================
+# "/analyze" 주소로 POST 요청이 오면 실행되는 핵심 연동 라우터
+# =========================================================================
 @app.post("/analyze")
 async def analyze_review(request: Request):
     try:
-        # 1. 클라이언트(프론트엔드)가 보낸 JSON 데이터를 비동기로 읽어옴
+        # 1. 아림님이 보낸 JSON 데이터 읽기 ({"review": text})
         data = await request.json()
-        # 2. JSON 데이터 안에서 "review"라는 키로 전달된 텍스트를 추출
         user_review = data.get("review") 
         
-        # [디버깅] 서버 터미널에 수신된 데이터를 출력하여 연동 확인
-        print(f"수신된 리뷰 데이터: {user_review}")
+        print(f"📥 아림님 서버로부터 수신된 리뷰: {user_review}")
 
-        # 만약 리뷰 내용이 비어있다면 위험 점수를 0으로 반환하고 종료
         if not user_review:
             return {"danger_score": 0.0}
 
-        # [위험도 분석 알고리즘 시작]
-        # 3. 기본 안전 점수를 5.0점으로 설정 (위험할수록 점수가 낮아짐)
-        calculated_score = 5.0
-        deduction_unit = 0.5
+        # 2. 1단계: OpenAI GPT 모델을 돌려서 문맥 기반 안전 점수(1~5점) 획득
+        ai_safety_score = analyze_review_with_ai(user_review)
+        print(f"🤖 GPT가 분석한 1차 안전 점수: {ai_safety_score}")
 
-        # 4. 감지할 위험 키워드 목록 정의
-        dangerous_words = ["칼", "싸움", "취객", "폭행", "무서워", "번화가"]
+        # 3. 2단계: 아림님이 원하는 '위험도(Danger Score)'로 역산 기준 세우기
+        # (안전 점수가 5점 만점에 1점이면 -> 기본 위험도는 4점이 됨)
+        calculated_danger_score = 5.0 - ai_safety_score
 
-        # 5. 위험 단어 리스트를 하나씩 돌며 사용자의 리뷰에 포함되어 있는지 검사
-        for word in dangerous_words:
+        # 4. 3단계: 확정적 패널티 키워드 감지 (위험도가 올라가야 하므로 여기서는 + 플러스 처리)
+        penalty_keywords = {
+            "취객": 0.5, "싸움": 0.5, "폭행": 1.0, 
+            "범죄": 1.0, "칼부림": 1.5, "바바리맨": 1.0, "스토킹": 1.0
+        }
+
+        for word, penalty in penalty_keywords.items():
             if word in user_review:
-                # 위험 단어 발견 시 기본 점수에서 0.5점 감점
-                # max(0.0, ...) 함수를 사용하여 점수가 0점 미만으로 내려가지 않게 방어
-                calculated_score = max(0.0, calculated_score - deduction_unit)
+                # 위험 단어 발견 시 위험도 점수를 가산
+                calculated_danger_score = min(5.0, calculated_danger_score + penalty)
+                print(f"🚨 감지된 위험 단어: {word} -> 현재 위험 점수: {calculated_danger_score}")
 
-                # [디버깅] 어떤 단어 때문에 점수가 깎였는지 로그 기록
-                print(f"감지된 단어: {word} -> 현재 안전 점수: {calculated_score}")
-
-        # 6. 최종 계산된 점수를 JSON 형태로 프론트엔드에 응답
-        return {"danger_score": calculated_score}
+        # 5. 아림님 서버가 기다리는 포맷으로 최종 위험도 점수 반환
+        print(f"📤 아림님 백엔드로 전송할 최종 danger_score: {calculated_danger_score}")
+        return {"danger_score": calculated_danger_score}
 
     except Exception as e:
-        # 오류 발생 시 서버가 중단되지 않도록 예외 처리 후 0점 반환
         print(f"에러 발생: {e}")
         return {"danger_score": 0.0}
 
+
 # 이 파일이 메인으로 실행될 때 서버 가동
 if __name__ == "__main__":
-    # uvicorn 서버 실행: IP는 0.0.0.0(모든 접근), 포트는 8001번 사용
+    # 아림님 소스코드에 하드코딩된 포트 8001번으로 서버 구동
     uvicorn.run(app, host="0.0.0.0", port=8001)
