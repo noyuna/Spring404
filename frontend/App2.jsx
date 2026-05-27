@@ -65,6 +65,7 @@ function App() {
   const [sheetHeight, setSheetHeight] = useState(HOME_SHEET_HEIGHT);
 
   const routeLineRef = useRef(null);
+  const routeGlowRef = useRef(null);
   const dragRef = useRef({
     dragging: false,
     startY: 0,
@@ -82,12 +83,22 @@ function App() {
 
     clearRouteLine();
 
+    routeGlowRef.current = new window.google.maps.Polyline({
+      path: selectedRoute.path,
+      map,
+      strokeColor: '#ffffff',
+      strokeWeight: 13,
+      strokeOpacity: 0.9,
+      zIndex: 8,
+    });
+
     routeLineRef.current = new window.google.maps.Polyline({
       path: selectedRoute.path,
       map,
-      strokeColor: '#16a34a',
-      strokeWeight: 7,
-      strokeOpacity: 0.9,
+      strokeColor: '#15803d',
+      strokeWeight: 6,
+      strokeOpacity: 0.96,
+      zIndex: 9,
     });
   }, [map, selectedRoute]);
 
@@ -95,6 +106,11 @@ function App() {
     if (routeLineRef.current) {
       routeLineRef.current.setMap(null);
       routeLineRef.current = null;
+    }
+
+    if (routeGlowRef.current) {
+      routeGlowRef.current.setMap(null);
+      routeGlowRef.current = null;
     }
   };
 
