@@ -148,7 +148,7 @@ async def rank_routes(payload: RouteRankInput):
         )
 
     ranked_routes.sort(
-        key=lambda route: (route["totalSafetyScore"], route["safetyScore"]),
+        key=lambda route: (route["safetyScore"], route["totalSafetyScore"]),
         reverse=True,
     )
     return {"routes": ranked_routes}
