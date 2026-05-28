@@ -342,7 +342,7 @@ def calculate_safety_score(zone_id):
         }
 
     review_score = get_review_score_average(zone_id)
-    public_score = normalize_public_safety_score(public_zone["public_safety_score"])
+    public_score = float(public_zone["public_safety_score"])
 
     if review_score is None:
         final_score = public_score
