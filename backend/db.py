@@ -26,6 +26,8 @@ DB_CONFIG = {
 
 REVIEW_WEIGHT = float(os.getenv("REVIEW_WEIGHT", "0.6"))
 PUBLIC_WEIGHT = float(os.getenv("PUBLIC_WEIGHT", "0.4"))
+PUBLIC_SCORE_BOOST = float(os.getenv("PUBLIC_SCORE_BOOST", "2.5"))
+PUBLIC_SCORE_OFFSET = float(os.getenv("PUBLIC_SCORE_OFFSET", "0.35"))
 
 HONGDAE_CENTER_LAT = float(os.getenv("HONGDAE_CENTER_LAT", "37.5572"))
 HONGDAE_CENTER_LNG = float(os.getenv("HONGDAE_CENTER_LNG", "126.9245"))
@@ -43,6 +45,23 @@ MAX_LNG = HONGDAE_CENTER_LNG + (
 )
 TOTAL_ROWS = math.ceil((MAX_LAT - MIN_LAT) / GRID_LAT_SIZE)
 TOTAL_COLS = math.ceil((MAX_LNG - MIN_LNG) / GRID_LNG_SIZE)
+
+
+def normalize_public_safety_score(score):
+    if score is None:
+        return 0.0
+
+    raw_score = float(score)
+
+    if raw_score > 5.0 and raw_score <= 100.0:
+        raw_score = raw_score / 20.0
+
+    base_score = max(0.0, min(raw_score, 5.0))
+    if base_score == 0.0:
+        return 0.0
+
+    adjusted_score = (base_score * PUBLIC_SCORE_BOOST) + PUBLIC_SCORE_OFFSET
+    return round(max(0.0, min(adjusted_score, 5.0)), 2)
 
 
 @contextmanager
@@ -269,7 +288,14 @@ def get_public_safety_zone(zone_id):
     with get_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(sql, (zone_id,))
-            return cursor.fetchone()
+            row = cursor.fetchone()
+
+    if row is not None:
+        row["public_safety_score"] = normalize_public_safety_score(
+            row["public_safety_score"]
+        )
+
+    return row
 
 
 def get_public_safety_zones():
@@ -281,7 +307,14 @@ def get_public_safety_zones():
     with get_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(sql)
-            return cursor.fetchall()
+            rows = cursor.fetchall()
+
+    for row in rows:
+        row["public_safety_score"] = normalize_public_safety_score(
+            row["public_safety_score"]
+        )
+
+    return rows
 
 
 def get_review_score_average(zone_id):
@@ -309,7 +342,7 @@ def calculate_safety_score(zone_id):
         }
 
     review_score = get_review_score_average(zone_id)
-    public_score = public_zone["public_safety_score"]
+    public_score = normalize_public_safety_score(public_zone["public_safety_score"])
 
     if review_score is None:
         final_score = public_score
@@ -368,7 +401,8 @@ def get_map_zones():
 
     for zone in zones:
         review_score = zone["review_safety_score"]
-        public_score = float(zone["public_safety_score"])
+        public_score = normalize_public_safety_score(zone["public_safety_score"])
+        zone["public_safety_score"] = public_score
         if review_score is None:
             final_score = public_score
         else:
