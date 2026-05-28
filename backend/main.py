@@ -54,7 +54,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    init_tables()
+    try:
+        init_tables()
+    except Exception as e:
+        logger.exception("Database initialization failed on startup: %s", e)
 
 
 @app.get("/health")
