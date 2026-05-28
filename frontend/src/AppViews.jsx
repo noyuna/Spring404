@@ -778,13 +778,14 @@ export function BottomSheet({
                 borderRadius: 12,
                 padding: 12,
                 marginBottom: 8,
+                textAlign: 'center',
               }}
             >
-              <div style={{ color: '#f59e0b', marginBottom: 5 }}>
+              <div style={{ color: '#f59e0b', marginBottom: 5, textAlign: 'center' }}>
                 {'★'.repeat(review.user_score)}
                 {'☆'.repeat(5 - review.user_score)}
               </div>
-              <div style={{ color: '#374151', fontSize: 14 }}>
+              <div style={{ color: '#374151', fontSize: 14, textAlign: 'center' }}>
                 {review.content}
               </div>
             </div>
