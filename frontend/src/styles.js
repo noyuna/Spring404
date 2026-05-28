@@ -72,6 +72,7 @@ export const noticeStyle = {
   color: '#14532d',
   fontWeight: 800,
   fontSize: 14,
+  textAlign: 'center',
 };
 
 export const scoreBoxStyle = {
