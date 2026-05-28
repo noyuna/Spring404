@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: hereji-ai
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: ai
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: web
+    name: hereji-backend
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: AI_HOST
+        fromService:
+          name: hereji-ai
+          type: web
+          property: host
+      - key: AI_PORT
+        fromService:
+          name: hereji-ai
+          type: web
+          property: port
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: REVIEW_WEIGHT
+        value: "0.6"
+      - key: PUBLIC_WEIGHT
+        value: "0.4"

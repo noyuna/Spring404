@@ -23,12 +23,23 @@ from db import (
     save_review,
     upsert_public_safety_zone,
 )
-from schemas import PublicSafetyZoneCreate, ReviewCreate
+from schemas import PublicSafetyZoneCreate, ReviewCreate, RouteSafetyRequest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-AI_URL = os.getenv("AI_URL", "http://localhost:8001/analyze")
+AI_HOST = os.getenv("AI_HOST")
+AI_PORT = os.getenv("AI_PORT")
+AI_BASE_URL = os.getenv("AI_BASE_URL")
+
+if not AI_BASE_URL and AI_HOST:
+    AI_BASE_URL = f"http://{AI_HOST}:{AI_PORT or '10000'}"
+
+AI_URL = os.getenv("AI_URL") or f"{AI_BASE_URL or 'http://localhost:8001'}/analyze"
+AI_ROUTE_URL = (
+    os.getenv("AI_ROUTE_URL")
+    or f"{AI_BASE_URL or 'http://localhost:8001'}/rank-routes"
+)
 
 app = FastAPI(title="HereJi Safety Map API")
 
@@ -56,6 +67,9 @@ def call_ai(text):
         res = requests.post(AI_URL, json={"review": text}, timeout=3)
         res.raise_for_status()
         data = res.json()
+        if "ai_score" in data:
+            ai_score = float(data.get("ai_score") or 0)
+            return max(0.0, min(ai_score, 5.0))
         danger_score = float(data.get("danger_score") or 0)
         danger_score = max(0.0, min(danger_score, 5.0))
         return 5.0 - danger_score
@@ -76,6 +90,8 @@ def create_review(review: ReviewCreate):
         logger.exception("Failed to save review: %s", e)
         raise HTTPException(status_code=500, detail="Failed to save review")
 
+    safety_score = calculate_safety_score(zone_id)
+
     return {
         "message": "saved",
         "data": {
@@ -85,8 +101,114 @@ def create_review(review: ReviewCreate):
             "lng": review.lng,
             "user_score": review.user_score,
             "ai_score": ai_score,
+            "public_safety_score": safety_score["public_safety_score"],
+            "final_safety_score": safety_score["final_safety_score"],
         },
     }
+
+
+def find_zone_id_for_point(point, zones):
+    lat = point.get("lat")
+    lng = point.get("lng")
+    if lat is None or lng is None:
+        return None
+
+    for zone in zones:
+        if (
+            zone["min_lat"] <= lat < zone["max_lat"]
+            and zone["min_lng"] <= lng < zone["max_lng"]
+        ):
+            return zone["zone_id"]
+
+    return None
+
+
+def rank_routes_locally(routes, zones):
+    zone_scores = {
+        zone["zone_id"]: float(zone.get("final_safety_score") or 0)
+        for zone in zones
+    }
+    ranked = []
+
+    for route in routes:
+        zone_ids = []
+        seen_zone_ids = set()
+
+        for point in route.get("path", []):
+            zone_id = find_zone_id_for_point(point, zones)
+            if zone_id is not None and zone_id not in seen_zone_ids:
+                seen_zone_ids.add(zone_id)
+                zone_ids.append(zone_id)
+
+        total_score = sum(zone_scores.get(zone_id, 0.0) for zone_id in zone_ids)
+        average_score = total_score / len(zone_ids) if zone_ids else 0.0
+
+        ranked.append(
+            {
+                **route,
+                "zoneIds": zone_ids,
+                "totalSafetyScore": round(total_score, 2),
+                "safetyScore": round(average_score, 2),
+            }
+        )
+
+    return sorted(
+        ranked,
+        key=lambda route: (
+            route.get("safetyScore") or 0,
+            route.get("totalSafetyScore") or 0,
+        ),
+        reverse=True,
+    )
+
+
+@app.post("/routes/safety-rank")
+def rank_routes_by_safety(payload: RouteSafetyRequest):
+    try:
+        zones = get_map_zones()
+        routes = [route.model_dump() for route in payload.routes]
+    except Exception as e:
+        logger.exception("Failed to prepare route safety data: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to prepare route safety data")
+
+    ai_payload = {
+        "routes": [{"id": route["id"], "path": route["path"]} for route in routes],
+        "zones": [
+            {
+                "zone_id": zone["zone_id"],
+                "min_lat": zone["min_lat"],
+                "max_lat": zone["max_lat"],
+                "min_lng": zone["min_lng"],
+                "max_lng": zone["max_lng"],
+                "final_safety_score": zone["final_safety_score"],
+            }
+            for zone in zones
+        ],
+    }
+
+    try:
+        res = requests.post(AI_ROUTE_URL, json=ai_payload, timeout=5)
+        res.raise_for_status()
+        ai_ranked = res.json().get("routes", [])
+        route_by_id = {route["id"]: route for route in routes}
+        ranked = []
+
+        for ai_route in ai_ranked:
+            original = route_by_id.get(ai_route.get("id"))
+            if original is None:
+                continue
+            ranked.append({**original, **ai_route})
+
+        missing_routes = [
+            route for route in routes if route["id"] not in {item["id"] for item in ranked}
+        ]
+        if missing_routes:
+            ranked.extend(rank_routes_locally(missing_routes, zones))
+
+        return {"routes": ranked, "source": "ai"}
+    except Exception as e:
+        logger.exception("AI route ranking failed, using local fallback: %s", e)
+        return {"routes": rank_routes_locally(routes, zones), "source": "backend-fallback"}
 
 
 @app.get("/reviews")

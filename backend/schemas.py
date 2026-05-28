@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class ReviewCreate(BaseModel):
     content: str
@@ -17,3 +17,19 @@ class PublicSafetyZoneCreate(BaseModel):
 
 class SafetyScoreRequest(BaseModel):
     zone_id: int
+
+
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class RouteCandidate(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    path: list[RoutePoint]
+
+
+class RouteSafetyRequest(BaseModel):
+    routes: list[RouteCandidate]
