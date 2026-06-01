@@ -141,6 +141,7 @@ def init_tables():
         cctv_count INT DEFAULT 0,
         lamp_count INT DEFAULT 0,
         convenience_count INT DEFAULT 0,
+        police_count INT DEFAULT 0,
         public_safety_score FLOAT NOT NULL
     )
     """
@@ -180,6 +181,24 @@ def init_tables():
                     """
                     ALTER TABLE public_safety_zone
                     ADD COLUMN convenience_count INT DEFAULT 0 AFTER lamp_count
+                    """
+                )
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS column_count
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'public_safety_zone'
+                  AND COLUMN_NAME = 'police_count'
+                """
+            )
+            has_police_count = cursor.fetchone()["column_count"] > 0
+            if not has_police_count:
+                cursor.execute(
+                    """
+                    ALTER TABLE public_safety_zone
+                    ADD COLUMN police_count INT DEFAULT 0 AFTER convenience_count
                     """
                 )
 
@@ -256,13 +275,15 @@ def upsert_public_safety_zone(zone):
         cctv_count,
         lamp_count,
         convenience_count,
+        police_count,
         public_safety_score
     )
-    VALUES (%s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         cctv_count = VALUES(cctv_count),
         lamp_count = VALUES(lamp_count),
         convenience_count = VALUES(convenience_count),
+        police_count = VALUES(police_count),
         public_safety_score = VALUES(public_safety_score)
     """
     with get_connection() as conn:
@@ -274,6 +295,7 @@ def upsert_public_safety_zone(zone):
                     zone.cctv_count,
                     zone.lamp_count,
                     zone.convenience_count,
+                    zone.police_count,
                     zone.public_safety_score,
                 ),
             )
@@ -281,7 +303,13 @@ def upsert_public_safety_zone(zone):
 
 def get_public_safety_zone(zone_id):
     sql = """
-    SELECT zone_id, cctv_count, lamp_count, convenience_count, public_safety_score
+    SELECT
+        zone_id,
+        cctv_count,
+        lamp_count,
+        convenience_count,
+        police_count,
+        public_safety_score
     FROM public_safety_zone
     WHERE zone_id = %s
     """
@@ -300,7 +328,13 @@ def get_public_safety_zone(zone_id):
 
 def get_public_safety_zones():
     sql = """
-    SELECT zone_id, cctv_count, lamp_count, convenience_count, public_safety_score
+    SELECT
+        zone_id,
+        cctv_count,
+        lamp_count,
+        convenience_count,
+        police_count,
+        public_safety_score
     FROM public_safety_zone
     ORDER BY zone_id
     """
@@ -338,6 +372,7 @@ def calculate_safety_score(zone_id):
             "cctv_count": 0,
             "lamp_count": 0,
             "convenience_count": 0,
+            "police_count": 0,
             "public_safety_score": 0.0,
         }
 
@@ -359,6 +394,7 @@ def calculate_safety_score(zone_id):
         "cctv_count": public_zone["cctv_count"],
         "lamp_count": public_zone["lamp_count"],
         "convenience_count": public_zone["convenience_count"],
+        "police_count": public_zone["police_count"],
     }
 
 
@@ -375,6 +411,7 @@ def get_map_zones():
         COALESCE(psz.cctv_count, 0) AS cctv_count,
         COALESCE(psz.lamp_count, 0) AS lamp_count,
         COALESCE(psz.convenience_count, 0) AS convenience_count,
+        COALESCE(psz.police_count, 0) AS police_count,
         COALESCE(psz.public_safety_score, 0) AS public_safety_score,
         AVG((r.user_score + r.ai_score) / 2) AS review_safety_score
     FROM safety_zone sz
@@ -391,6 +428,7 @@ def get_map_zones():
         psz.cctv_count,
         psz.lamp_count,
         psz.convenience_count,
+        psz.police_count,
         psz.public_safety_score
     ORDER BY sz.zone_id
     """
