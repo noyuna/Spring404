@@ -91,10 +91,22 @@ def apply_keyword_penalties(review_text: str, ai_score: float) -> float:
         "어두": 0.5,
         "무서": 0.5,
     }
+    bonus_keywords = {
+        "깨끗": 0.5,
+        "안전": 0.7,
+        "좋아": 0.4,
+        "추천": 0.4,
+        "안심": 0.7,
+        "든든": 0.6,
+    }
 
     for keyword, penalty in penalty_keywords.items():
         if keyword in review_text:
             danger_score += penalty
+
+    for keyword, bonus in bonus_keywords.items():
+        if keyword in review_text:
+            danger_score -= bonus
 
     return clamp_score(danger_score)
 
