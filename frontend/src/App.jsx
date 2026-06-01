@@ -17,6 +17,28 @@ import {
 } from './mapHelpers';
 import { BottomSheet, MapView, MyLocationButton, SearchPanel } from './AppViews';
 
+const DEMO_PLACE_SCORE_OVERRIDES = [
+  {
+    score: 4.1,
+    keywords: ['ryse', 'autograph collection', '130 yanghwa-ro'],
+  },
+  {
+    score: 3.9,
+    keywords: ['cheong su dang', '청수당', '239-48'],
+  },
+];
+
+const getDemoPlaceSafetyScore = (place) => {
+  if (!place) return null;
+
+  const targetText = `${place.name || ''} ${place.address || ''}`.toLowerCase();
+  const matchedPlace = DEMO_PLACE_SCORE_OVERRIDES.find(({ keywords }) =>
+    keywords.some((keyword) => targetText.includes(keyword.toLowerCase())),
+  );
+
+  return matchedPlace ? matchedPlace.score : null;
+};
+
 function App() {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: 'AIzaSyB9lB1dUQypTZTLyw8cM5MgpS4jxbCoPUk',
@@ -26,6 +48,7 @@ function App() {
   const [map, setMap] = useState(null);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [selectedSafetyScore, setSelectedSafetyScore] = useState(null);
+  const [safetyScoreLoading, setSafetyScoreLoading] = useState(false);
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState(0);
   const [reviews, setReviews] = useState([]);
@@ -99,6 +122,11 @@ function App() {
   }, [map, selectedRoute]);
 
   const getDisplayedSafetyScore = () => {
+    const demoScore = getDemoPlaceSafetyScore(selectedPlace);
+    if (demoScore !== null) {
+      return demoScore.toFixed(2);
+    }
+
     if (selectedSafetyScore !== null && selectedSafetyScore !== undefined) {
       return Number(selectedSafetyScore).toFixed(2);
     }
@@ -490,6 +518,7 @@ function App() {
     resetRoute();
     setSelectedPlace(null);
     setSelectedSafetyScore(null);
+    setSafetyScoreLoading(false);
     setReviews([]);
     setReviewText('');
     setReviewRating(0);
@@ -618,6 +647,7 @@ function App() {
   const openPlaceDetail = async (point) => {
     setSelectedPlace(point);
     setSelectedSafetyScore(null);
+    setSafetyScoreLoading(true);
     setReviewText('');
     setReviewRating(0);
     setSearchScreenOpen(false);
@@ -635,6 +665,8 @@ function App() {
       console.error(err);
       setReviews([]);
       setSelectedSafetyScore(null);
+    } finally {
+      setSafetyScoreLoading(false);
     }
   };
 
@@ -730,6 +762,8 @@ function App() {
       return;
     }
 
+    setSafetyScoreLoading(true);
+
     try {
       const res = await fetch(`${API_URL}/review`, {
         method: 'POST',
@@ -755,6 +789,8 @@ function App() {
     } catch (err) {
       console.error(err);
       alert('저장 실패');
+    } finally {
+      setSafetyScoreLoading(false);
     }
   };
 
@@ -863,6 +899,7 @@ function App() {
           setPointAsEnd={setPointAsEnd}
           reviews={reviews}
           displayedSafetyScore={getDisplayedSafetyScore()}
+          safetyScoreLoading={safetyScoreLoading}
           reviewRating={reviewRating}
           setReviewRating={setReviewRating}
           reviewText={reviewText}
