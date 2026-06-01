@@ -26,6 +26,7 @@ function App() {
   const [map, setMap] = useState(null);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [selectedSafetyScore, setSelectedSafetyScore] = useState(null);
+  const [safetyScoreLoading, setSafetyScoreLoading] = useState(false);
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState(0);
   const [reviews, setReviews] = useState([]);
@@ -490,6 +491,7 @@ function App() {
     resetRoute();
     setSelectedPlace(null);
     setSelectedSafetyScore(null);
+    setSafetyScoreLoading(false);
     setReviews([]);
     setReviewText('');
     setReviewRating(0);
@@ -618,6 +620,7 @@ function App() {
   const openPlaceDetail = async (point) => {
     setSelectedPlace(point);
     setSelectedSafetyScore(null);
+    setSafetyScoreLoading(true);
     setReviewText('');
     setReviewRating(0);
     setSearchScreenOpen(false);
@@ -635,6 +638,8 @@ function App() {
       console.error(err);
       setReviews([]);
       setSelectedSafetyScore(null);
+    } finally {
+      setSafetyScoreLoading(false);
     }
   };
 
@@ -730,6 +735,8 @@ function App() {
       return;
     }
 
+    setSafetyScoreLoading(true);
+
     try {
       const res = await fetch(`${API_URL}/review`, {
         method: 'POST',
@@ -755,6 +762,8 @@ function App() {
     } catch (err) {
       console.error(err);
       alert('저장 실패');
+    } finally {
+      setSafetyScoreLoading(false);
     }
   };
 
@@ -863,6 +872,7 @@ function App() {
           setPointAsEnd={setPointAsEnd}
           reviews={reviews}
           displayedSafetyScore={getDisplayedSafetyScore()}
+          safetyScoreLoading={safetyScoreLoading}
           reviewRating={reviewRating}
           setReviewRating={setReviewRating}
           reviewText={reviewText}

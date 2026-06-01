@@ -442,6 +442,7 @@ export function BottomSheet({
   setPointAsEnd,
   reviews,
   displayedSafetyScore,
+  safetyScoreLoading,
   reviewRating,
   setReviewRating,
   reviewText,
@@ -449,7 +450,43 @@ export function BottomSheet({
   saveReview,
 }) {
   return (
-    <div
+    <>
+      {safetyScoreLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.28)',
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: 'min(280px, 100%)',
+              borderRadius: 14,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 18px 45px rgba(15, 23, 42, 0.24)',
+              padding: '18px 16px',
+              color: '#111827',
+              fontSize: 15,
+              fontWeight: 900,
+              lineHeight: 1.45,
+              textAlign: 'center',
+            }}
+          >
+            안전점수를 가져오는 중입니다.
+          </div>
+        </div>
+      )}
+
+      <div
       style={{
         position: 'absolute',
         left: 0,
@@ -851,6 +888,7 @@ export function BottomSheet({
           </div>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
