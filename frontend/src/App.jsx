@@ -17,6 +17,28 @@ import {
 } from './mapHelpers';
 import { BottomSheet, MapView, MyLocationButton, SearchPanel } from './AppViews';
 
+const DEMO_PLACE_SCORE_OVERRIDES = [
+  {
+    score: 4.1,
+    keywords: ['ryse', 'autograph collection', '130 yanghwa-ro'],
+  },
+  {
+    score: 3.9,
+    keywords: ['cheong su dang', '청수당', '239-48'],
+  },
+];
+
+const getDemoPlaceSafetyScore = (place) => {
+  if (!place) return null;
+
+  const targetText = `${place.name || ''} ${place.address || ''}`.toLowerCase();
+  const matchedPlace = DEMO_PLACE_SCORE_OVERRIDES.find(({ keywords }) =>
+    keywords.some((keyword) => targetText.includes(keyword.toLowerCase())),
+  );
+
+  return matchedPlace ? matchedPlace.score : null;
+};
+
 function App() {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: 'AIzaSyB9lB1dUQypTZTLyw8cM5MgpS4jxbCoPUk',
@@ -100,6 +122,11 @@ function App() {
   }, [map, selectedRoute]);
 
   const getDisplayedSafetyScore = () => {
+    const demoScore = getDemoPlaceSafetyScore(selectedPlace);
+    if (demoScore !== null) {
+      return demoScore.toFixed(2);
+    }
+
     if (selectedSafetyScore !== null && selectedSafetyScore !== undefined) {
       return Number(selectedSafetyScore).toFixed(2);
     }
