@@ -12,6 +12,7 @@ class PublicSafetyZoneCreate(BaseModel):
     cctv_count: int = Field(default=0, ge=0)
     lamp_count: int = Field(default=0, ge=0)
     convenience_count: int = Field(default=0, ge=0)
+    police_count: int = Field(default=0, ge=0)
     public_safety_score: float = Field(ge=0.0, le=5.0)
 
 
