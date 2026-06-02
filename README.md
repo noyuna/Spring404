@@ -147,8 +147,8 @@ User
 ┃ ┗ requirements.txt
 ┣ 📁 ai
 ┃ ┣ .gitignore
-┃ ┣ README.md
 ┃ ┣ main.py
+┃ ┣ ai_scoring.py
 ┃ ┗ requirements.txt
 ┗ README.md
 ```
@@ -188,9 +188,12 @@ User
 - 깃허브에 업로드하지 않을 파일 목록 관리
 
 `main.py`
-- FastAPI 기반 AI 분석 서버 실행 파일
-- 리뷰 텍스트를 수신하여 위험도(danger_score) 분석 및 반환
-- 특정 키워드 감지 시 안전 점수 차감 로직 수행
+- FastAPI 기반 AI 분석 및 경로 랭킹 API 서버 메인 파일
+- 실시간 리뷰 감성 분석 및 평균 안심 점수 알고리즘 수행
+
+`ai_scoring.py`
+- AI 서버 인스턴스 연동 및 보조 스크립트
+- 메인 API 파이프라인의 수치 연산 및 구동 환경 지원
 
 `requirements.txt`
 - AI 서버 실행에 필요한 라이브러리 목록
