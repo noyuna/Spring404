@@ -192,7 +192,7 @@ User
 - 프론트엔드 의존성 및 실행 스크립트 관리
 
 `package-lock.json`
--프론트엔드 의존성 버전 고정 파일
+- 프론트엔드 의존성 버전 고정 파일
 
 #### backend
 `.gitignore`
