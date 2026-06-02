@@ -171,13 +171,16 @@ User
 
 #### frontend
 `App.jsx`
-- React 기반 메인 UI 및 지도 기능 구현
+- React 기반 메인 UI
+- 지도 기능 구현
 
 `AppViews.jsx`
-- 화면 구성 컴포넌트 및 하단 패널 UI 관리
+- 화면 구성 컴포넌트
+- 하단 패널 UI 관리
 
 `mapHelpers.js`
-- 지도 설정값, API 주소, 거리/시간 포맷 함수 관리
+- 지도 설정값, API 주소
+- 거리/시간 포맷 함수 관리
 
 `styles.js`
 - 공통 스타일 및 UI 스타일 관리
