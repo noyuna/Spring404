@@ -186,17 +186,17 @@ User
 - 공통 스타일 및 UI 스타일 관리
 
 `main.jsx`
-- React 앱 렌더링 진입점
+- React 실행 파일
 
 `index.html`
-- Vite 기반 React 앱 HTML 진입 파일
+- React 실행을 위한 기본 HTML 파일
 
 `package.json`
-- 프론트엔드 의존성 관리
+- 프로젝트에 필요한 라이브러리 정보 관리
 - 실행 및 빌드 스크립트 관리
 
 `package-lock.json`
-- 프론트엔드 의존성 버전 고정 및 관리
+- 사용된 라이브러리 버전 정보 관리
 
 #### backend
 `.gitignore`
