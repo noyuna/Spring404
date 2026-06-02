@@ -171,16 +171,16 @@ User
 
 #### frontend
 `App.jsx`
-- React 기반 메인 UI
-- 지도 기능 구현
+- React 기반 메인 화면 구현
+- Google Maps 기반 지도 기능 구현
 
 `AppViews.jsx`
-- 화면 구성 컴포넌트
-- 하단 패널 UI 관리
+- 화면 구성 컴포넌트 관리
+- 하단 패널 UI 구현
 
 `mapHelpers.js`
-- 지도 설정값, API 주소
-- 거리/시간 포맷 함수 관리
+- 지도 설정값 및 API 주소 관리
+- 거리·시간 포맷 유틸리티 함수 제공
 
 `styles.js`
 - 공통 스타일 및 UI 스타일 관리
@@ -192,10 +192,11 @@ User
 - Vite 기반 React 앱 HTML 진입 파일
 
 `package.json`
-- 프론트엔드 의존성 및 실행 스크립트 관리
+- 프론트엔드 의존성 관리
+- 실행 및 빌드 스크립트 관리
 
 `package-lock.json`
-- 프론트엔드 의존성 버전 고정 파일
+- 프론트엔드 의존성 버전 고정 및 관리
 
 #### backend
 `.gitignore`
