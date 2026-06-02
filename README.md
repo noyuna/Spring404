@@ -138,7 +138,15 @@ User
 ```text
 📦 Project Root(Spring404)
 ┣ 📁 frontend
-┃ ┣ App.jsx
+┃ ┗ 📁 src
+┃   ┣ App.jsx
+┃   ┣ AppViews.jsx
+┃   ┣ mapHelpers.js
+┃   ┣ styles.js
+┃   ┗ main.jsx
+┃ ┣ index.html
+┃ ┣ package.json
+┃ ┗ package-lock.json
 ┣ 📁 backend
 ┃ ┣ .gitignore
 ┃ ┣ db.py
@@ -150,6 +158,12 @@ User
 ┃ ┣ main.py
 ┃ ┣ ai_scoring.py
 ┃ ┗ requirements.txt
+┃ 📁 doc
+┃ ┣ PMF_analysis.md
+┃ ┗ elevator_speech.md
+┣ .gitignore
+┣ render.yaml
+┣ self_demo.md
 ┗ README.md
 ```
 
@@ -157,9 +171,28 @@ User
 
 #### frontend
 `App.jsx`
-- React 기반 사용자 UI
-- 지도 (Google Maps) 렌더링
-- 안전 지도 시각화 화면
+- React 기반 메인 UI 및 지도 기능 구현
+
+`AppViews.jsx`
+- 화면 구성 컴포넌트 및 하단 패널 UI 관리
+
+`mapHelpers.js`
+- 지도 설정값, API 주소, 거리/시간 포맷 함수 관리
+
+`styles.js`
+- 공통 스타일 및 UI 스타일 관리
+
+`main.jsx`
+- React 앱 렌더링 진입점
+
+`index.html`
+- Vite 기반 React 앱 HTML 진입 파일
+
+`package.json`
+- 프론트엔드 의존성 및 실행 스크립트 관리
+
+`package-lock.json`
+-프론트엔드 의존성 버전 고정 파일
 
 #### backend
 `.gitignore`
